@@ -522,12 +522,12 @@
       <h2>Envío de registros</h2>
 
       <div class="export-row">
-        <button class="primary" id="btn-export">✉️ Enviar por email</button>
+        <button class="primary" id="btn-export">📤 Enviar inventario</button>
         <button class="ghost" id="btn-wipe">🗑 Borrar todo</button>
       </div>
 
-      <textarea id="csv-out" readonly aria-label="Datos CSV para adjuntar al correo"></textarea>
-      <div class="email-note">El navegador abre tu correo y deja los datos listos para adjuntar.</div>
+      <textarea id="csv-out" readonly aria-label="Datos CSV"></textarea>
+      <div class="email-note">Se genera el archivo y se abre el menú de compartir del celular.</div>
 
     </div>
 
@@ -727,8 +727,8 @@
   btnStart.addEventListener('click', startScan);
   btnStop.addEventListener('click', () => { stopScan(); setStatus(''); });
 
-  // ---------- Enviar por email ----------
-  $('btn-export').addEventListener('click', () => {
+  // ---------- Enviar inventario ----------
+  $('btn-export').addEventListener('click', async () => {
     if(records.length === 0){
       setStatus('No hay registros para enviar.', false);
       return;
@@ -741,32 +741,42 @@
         .join(',')
     );
 
-    const csv = [header.join(','), ...rows].join('\n');
+    const csv = '\ufeff' + [header.join(','), ...rows].join('\r\n');
+    const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
+    const fileName = 'Inventario_Repuestos_' + fecha + '.csv';
+    const file = new File([csv], fileName, { type: 'text/csv;charset=utf-8' });
 
-    const subject = 'Registros de inventario - Castro S.A.';
-    const body =
-      'Hola,%0D%0A%0D%0A' +
-      'Adjunto los registros relevados del inventario.%0D%0A%0D%0A' +
-      'Cantidad de registros: ' + records.length + '%0D%0A%0D%0A' +
-      'IMPORTANTE: el CSV se muestra debajo para poder copiarlo y adjuntarlo al correo.';
+    const shareData = {
+      title: 'Inventario de Repuestos - Castro S.A.',
+      text: 'Inventario de repuestos. Registros: ' + records.length,
+      files: [file]
+    };
 
-    // El navegador no permite adjuntar automáticamente un archivo
-    // generado por JavaScript mediante mailto:. Abrimos el cliente de
-    // correo y mostramos el CSV para que pueda guardarse/adjuntarse.
-    csvOut.style.display = 'block';
-    csvOut.value = csv;
+    // En Android compatible, esto abre el menú nativo de compartir
+    // con el CSV ya preparado como archivo adjunto.
+    try {
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        await navigator.share(shareData);
+        setStatus('Inventario listo para compartir.', true);
+        return;
+      }
+    } catch(err) {
+      // El usuario puede cerrar el menú de compartir: no hacemos nada.
+      if (err && err.name === 'AbortError') return;
+    }
 
-    const mailto = 'mailto:?subject=' + encodeURIComponent(subject) +
-                   '&body=' + body;
-
-    window.location.href = mailto;
-
-    setStatus(
-      'Se abrió el correo. Adjuntá el CSV mostrado debajo antes de enviarlo.',
-      true
-    );
+    // Fallback: descarga el CSV si el navegador no soporta compartir archivos.
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Tu navegador no permite compartir archivos directamente. Se descargó el CSV.', true);
   });
-
   loadRecords();
 })();
 </script>
