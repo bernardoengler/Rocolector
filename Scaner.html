@@ -1,212 +1,542 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Escáner de inventario</title>
-<style>
-  :root{
-    --bg: #1a1d18;
-    --panel: #22261f;
-    --panel-line: #383d33;
-    --ink: #eee9dd;
-    --ink-dim: #9aa090;
-    --accent: #ff5a36;
-    --accent-dim: #7a3020;
-    --ok: #6fae5e;
-    --radius: 3px;
-  }
-  * { box-sizing: border-box; }
-  html, body{
-    margin:0; padding:0; background:var(--bg); color:var(--ink);
-    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
-    -webkit-tap-highlight-color: transparent;
-  }
-  body{ padding-bottom: 48px; }
-  header{
-    padding: 18px 16px 10px;
-    border-bottom: 1px solid var(--panel-line);
-  }
-  header h1{
-    margin:0; font-size: 17px; font-weight: 700; letter-spacing: 0.2px;
-  }
-  header p{
-    margin: 4px 0 0; font-size: 12.5px; color: var(--ink-dim);
-  }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Escáner de Inventario | Repuestos</title>
+  <link rel="icon" type="image/png" href="../imagenes/Favicon01.png">
 
-  main{ padding: 14px 14px 0; max-width: 480px; margin: 0 auto; }
+  <!-- Firebase / autenticación: se conserva la integración del sitio -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="/js/auth.js" defer></script>
+  <script src="/js/auth-check.js" defer></script>
 
-  .scanner{
-    position: relative;
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    background: #05060a;
-    border: 1px solid var(--panel-line);
-    border-radius: var(--radius);
-    overflow: hidden;
-    display:flex; align-items:center; justify-content:center;
-  }
-  .scanner video{
-    width:100%; height:100%; object-fit: cover; display:none;
-  }
-  .scanner.live video{ display:block; }
-  .scan-placeholder{
-    color: var(--ink-dim); font-size: 13px; text-align:center; padding: 0 20px;
-  }
-  .scan-line{
-    position:absolute; left:6%; right:6%; height:2px; background: var(--accent);
-    box-shadow: 0 0 8px 1px var(--accent);
-    top: 50%; display:none;
-    animation: sweep 1.6s ease-in-out infinite;
-  }
-  .scanner.live .scan-line{ display:block; }
-  @keyframes sweep{
-    0%   { top: 12%; opacity: .95; }
-    50%  { top: 88%; opacity: .6; }
-    100% { top: 12%; opacity: .95; }
-  }
-  .scan-frame{
-    position:absolute; inset: 10% 8%; border: 1px solid rgba(238,233,221,0.35);
-    pointer-events:none; display:none;
-  }
-  .scanner.live .scan-frame{ display:block; }
+  <style>
 
-  .scan-controls{
-    display:flex; gap:8px; margin-top: 10px;
-  }
-  button{
-    font-family: inherit; font-size: 13.5px; font-weight: 600;
-    border-radius: var(--radius); border: 1px solid var(--panel-line);
-    background: var(--panel); color: var(--ink);
-    padding: 10px 14px; cursor: pointer;
-  }
-  button:active{ transform: translateY(1px); }
-  button.primary{
-    background: var(--accent); border-color: var(--accent); color: #1a0d08;
-  }
-  button.ghost{ background: transparent; }
-  button:disabled{ opacity: .45; cursor: default; }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-  .status-line{
-    font-size: 12px; color: var(--ink-dim); margin-top: 6px; min-height: 16px;
-  }
-  .status-line.ok{ color: var(--ok); }
+      /* =================== PANTALLA =================== */
+      body {
+        min-height: 100vh;
+        font-family: 'Segoe UI', sans-serif;
+        background:
+          linear-gradient(rgba(0, 30, 15, .82), rgba(0, 30, 15, .82)),
+          url("../imagenes/FondoInicio.jpg") center/cover fixed;
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        padding: 25px 15px 35px;
+      }
 
-  section.card{
-    margin-top: 18px; border: 1px solid var(--panel-line); border-radius: var(--radius);
-    background: var(--panel); padding: 14px;
-  }
-  section.card h2{
-    margin: 0 0 10px; font-size: 12px; text-transform: none;
-    color: var(--ink-dim); font-weight: 600;
-  }
-  label{ display:block; font-size: 12px; color: var(--ink-dim); margin: 10px 0 4px; }
-  label:first-of-type{ margin-top: 0; }
-  input[type=text], input[type=number]{
-    width:100%; background: #171a14; border: 1px solid var(--panel-line);
-    color: var(--ink); border-radius: var(--radius); padding: 10px 10px;
-    font-size: 14px; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-  }
-  input[type=text]:focus, input[type=number]:focus{
-    outline: none; border-color: var(--accent);
-  }
-  input#f-barcode{ letter-spacing: 0.5px; }
+      /* =================== CONTENEDOR =================== */
+      .container {
+        width: 90%;
+        max-width: 900px;
+        text-align: center;
+      }
 
-  .save-row{ margin-top: 14px; display:flex; gap: 8px; }
-  .save-row button{ flex:1; }
+      /* =================== LOGO =================== */
+      .logo {
+        width: 300px;
+        max-width: 80%;
+        margin-bottom: 25px;
+      }
 
-  .list-head{
-    display:flex; align-items:baseline; justify-content: space-between;
-    margin-top: 22px; margin-bottom: 8px;
-  }
-  .list-head h2{ margin:0; font-size: 13px; color: var(--ink); font-weight: 700; }
-  .list-head span{ font-size: 12px; color: var(--ink-dim); }
+      /* =================== TITULOS =================== */
+      h1 {
+        color: #fff;
+        font-size: 1.8rem;
+        font-weight: 300;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        display: inline-block;
+        position: relative;
+        padding: 0 80px;
+      }
 
-  .record{
-    border: 1px solid var(--panel-line); border-radius: var(--radius);
-    padding: 10px 12px; margin-bottom: 8px; background: var(--panel);
-    display:flex; justify-content: space-between; gap: 10px;
-  }
-  .record .main{ min-width:0; }
-  .record .code{
-    font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--accent);
-  }
-  .record .fields{ font-size: 12.5px; color: var(--ink-dim); margin-top: 3px; line-height:1.5; }
-  .record .fields b{ color: var(--ink); font-weight: 500; }
-  .record button.del{
-    align-self: center; border: none; background: transparent; color: var(--ink-dim);
-    font-size: 16px; padding: 4px 6px;
-  }
-  .empty{
-    font-size: 13px; color: var(--ink-dim); text-align:center; padding: 20px 10px;
-    border: 1px dashed var(--panel-line); border-radius: var(--radius);
-  }
+      h1::before,
+      h1::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        width: 60px;
+        height: 2px;
+        background: #ffde00;
+      }
 
-  .export-row{ display:flex; gap:8px; margin-top: 14px; }
-  .export-row button{ flex:1; }
-  textarea#csv-out{
-    width:100%; margin-top:10px; height: 110px; background:#171a14; color: var(--ink);
-    border:1px solid var(--panel-line); border-radius: var(--radius); font-size: 11.5px;
-    font-family: ui-monospace, Menlo, monospace; padding: 8px; display:none;
-  }
-</style>
+      h1::before { left: 0; }
+      h1::after { right: 0; }
+
+      .subtitulo {
+        color: #fff;
+        font-size: 1.25rem;
+        font-weight: 300;
+        margin-bottom: 30px;
+      }
+
+      /* =================== TARJETAS =================== */
+      .card {
+        margin-top: 18px;
+        padding: 25px;
+        background: rgba(255,255,255,.08);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0,0,0,.35);
+      }
+
+      /* =================== ESCANER =================== */
+      .scanner {
+        position: relative;
+        width: 100%;
+        max-width: 720px;
+        aspect-ratio: 3.6 / 1;
+        margin: 0 auto;
+        background: #050805;
+        border: 2px solid rgba(255,255,255,.18);
+        border-radius: 15px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .scanner video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
+      }
+
+      .scanner.live video { display: block; }
+
+      .scan-placeholder {
+        color: #ddd;
+        font-size: 14px;
+        line-height: 1.7;
+        text-align: center;
+      }
+
+      .scan-line {
+        position: absolute;
+        left: 6%;
+        right: 6%;
+        height: 2px;
+        background: #ffde00;
+        box-shadow: 0 0 10px #ffde00;
+        top: 50%;
+        display: none;
+        animation: sweep 1.6s ease-in-out infinite;
+      }
+
+      .scanner.live .scan-line { display: block; }
+
+      @keyframes sweep {
+        0% { top: 12%; opacity: .95; }
+        50% { top: 88%; opacity: .6; }
+        100% { top: 12%; opacity: .95; }
+      }
+
+      .scan-frame {
+        position: absolute;
+        inset: 10% 8%;
+        border: 2px solid rgba(255,255,255,.5);
+        border-radius: 10px;
+        pointer-events: none;
+        display: none;
+      }
+
+      .scanner.live .scan-frame { display: block; }
+
+      /* =================== BOTONES =================== */
+      .scan-controls,
+      .save-row,
+      .export-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 15px;
+      }
+
+      button {
+        flex: 1;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 12px;
+        border: none;
+        padding: 12px 20px;
+        cursor: pointer;
+        transition: .3s;
+      }
+
+      button:active { transform: translateY(1px); }
+
+      button.primary {
+        background: #367c2b;
+        color: #fff;
+      }
+
+      button.primary:hover {
+        background: #ffde00;
+        color: #1d1d1d;
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,0,0,.3);
+      }
+
+      button.ghost {
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.2);
+        color: #fff;
+      }
+
+      button.ghost:hover {
+        background: rgba(255,255,255,.18);
+      }
+
+      button:disabled {
+        opacity: .4;
+        cursor: default;
+        transform: none;
+      }
+
+      /* =================== ESTADO =================== */
+      .status-line {
+        font-size: 13px;
+        color: #ddd;
+        margin-top: 10px;
+        min-height: 18px;
+      }
+
+      .status-line.ok { color: #ffde00; }
+
+      /* =================== FORMULARIO =================== */
+      section.card h2,
+      .export-card h2 {
+        margin: 0 0 15px;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 500;
+        text-align: left;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        color: #ddd;
+        margin: 12px 0 5px;
+        text-align: left;
+      }
+
+      input[type=text],
+      input[type=number] {
+        width: 100%;
+        background: rgba(0,0,0,.3);
+        border: 1px solid rgba(255,255,255,.18);
+        color: #fff;
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 14px;
+        font-family: 'Segoe UI', sans-serif;
+      }
+
+      input[type=text]:focus,
+      input[type=number]:focus {
+        outline: none;
+        border-color: #ffde00;
+        box-shadow: 0 0 0 2px rgba(255,222,0,.12);
+      }
+
+      input::placeholder { color: #999; }
+
+      input#f-barcode { letter-spacing: .5px; }
+
+      /* =================== LISTADO =================== */
+      .list-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 25px;
+        margin-bottom: 10px;
+        padding: 0 5px;
+      }
+
+      .list-head h2 {
+        font-size: 14px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .list-head span {
+        background: #ffde00;
+        color: #1d1d1d;
+        border-radius: 20px;
+        min-width: 28px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .record {
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 9px;
+        background: rgba(255,255,255,.07);
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        text-align: left;
+      }
+
+      .record .main { min-width: 0; }
+
+      .record .code {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 14px;
+        color: #ffde00;
+        font-weight: 600;
+      }
+
+      .record .fields {
+        font-size: 12.5px;
+        color: #ccc;
+        margin-top: 5px;
+        line-height: 1.5;
+      }
+
+      .record .fields b {
+        color: #fff;
+        font-weight: 600;
+      }
+
+      .record button.del {
+        align-self: center;
+        border: none;
+        background: transparent;
+        color: #aaa;
+        font-size: 17px;
+        padding: 5px;
+        flex: none;
+      }
+
+      .record button.del:hover {
+        color: #ffde00;
+      }
+
+      .empty {
+        font-size: 13px;
+        color: #bbb;
+        text-align: center;
+        padding: 25px 10px;
+        border: 1px dashed rgba(255,255,255,.2);
+        border-radius: 12px;
+      }
+
+      /* =================== CSV =================== */
+      textarea#csv-out {
+        width: 100%;
+        margin-top: 12px;
+        height: 110px;
+        background: rgba(0,0,0,.3);
+        color: #ddd;
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: 10px;
+        font-size: 11px;
+        font-family: monospace;
+        padding: 10px;
+        display: none;
+      }
+
+      .email-note {
+        margin-top: 9px;
+        color: #aaa;
+        font-size: 11px;
+        line-height: 1.4;
+        text-align: left;
+      }
+
+      /* =================== FOOTER =================== */
+      .footer {
+        margin-top: 30px;
+        color: #ccc;
+        font-size: .85rem;
+        line-height: 1.6;
+      }
+
+      /* =================== RESPONSIVE =================== */
+      @media (max-width: 768px) {
+        body {
+          padding: 20px 10px 30px;
+        }
+
+        .container {
+          width: 94%;
+        }
+
+        .logo {
+          width: 240px;
+        }
+
+        h1 {
+          font-size: 1.1rem;
+          letter-spacing: 2px;
+          padding: 0 35px;
+        }
+
+        h1::before,
+        h1::after {
+          width: 25px;
+        }
+
+        .subtitulo {
+          font-size: 1rem;
+          margin-bottom: 20px;
+        }
+
+        .card {
+          padding: 18px;
+          border-radius: 16px;
+        }
+
+        .scanner {
+          aspect-ratio: 2.8 / 1;
+        }
+
+        .scan-controls,
+        .save-row,
+        .export-row {
+          flex-direction: column;
+        }
+
+        button {
+          width: 100%;
+        }
+      }
+
+  </style>
 </head>
+
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-THYTNV490Z"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag() {
+    dataLayer.push(arguments);
+  }
+  gtag('js', new Date());
+  gtag('config', 'G-THYTNV490Z');
+</script>
+
+
 <body>
 
-<header>
-  <h1>Escáner de inventario</h1>
-  <p>Escaneá un código de barras y sumale los datos que necesites.</p>
-</header>
+  <div class="container">
 
-<main>
+    <h1>Recolector de datos</h1>
 
-  <div class="scanner" id="scanner">
-    <div class="scan-placeholder" id="scan-placeholder">La cámara aparece acá.<br>Tocá "Escanear" para empezar.</div>
-    <video id="video" playsinline muted></video>
-    <div class="scan-frame"></div>
-    <div class="scan-line"></div>
-  </div>
-
-  <div class="scan-controls">
-    <button class="primary" id="btn-start">Escanear</button>
-    <button class="ghost" id="btn-stop" disabled>Detener</button>
-  </div>
-  <div class="status-line" id="status"></div>
-
-  <section class="card">
-    <h2>Nuevo registro</h2>
-
-    <label for="f-barcode">Código de barras</label>
-    <input type="text" id="f-barcode" placeholder="Se completa al escanear, o escribilo a mano">
-
-    <label for="f-nombre">Nombre / producto</label>
-    <input type="text" id="f-nombre" placeholder="Ej: Yerba 1kg">
-
-    <label for="f-cantidad">Cantidad</label>
-    <input type="number" id="f-cantidad" placeholder="Ej: 10" inputmode="numeric">
-
-    <label for="f-ubicacion">Ubicación / nota</label>
-    <input type="text" id="f-ubicacion" placeholder="Ej: Estante 3, depósito">
-
-    <div class="save-row">
-      <button class="primary" id="btn-save">Guardar registro</button>
-      <button class="ghost" id="btn-clear">Limpiar</button>
+    <div class="subtitulo">
+      Castro S.A. | Repuestos
     </div>
-  </section>
 
-  <div class="list-head">
-    <h2>Registros guardados</h2>
-    <span id="count">0</span>
+    <div class="card">
+
+      <div class="scanner" id="scanner">
+        <div class="scan-placeholder" id="scan-placeholder">
+          Apuntá al código de barras.<br>
+          Tocá <b>"Escanear"</b> para comenzar.
+        </div>
+
+        <video id="video" playsinline muted></video>
+        <div class="scan-frame"></div>
+        <div class="scan-line"></div>
+      </div>
+
+      <div class="scan-controls">
+        <button class="primary" id="btn-start">📷 Escanear</button>
+        <button class="ghost" id="btn-stop" disabled>Detener</button>
+      </div>
+
+      <div class="status-line" id="status"></div>
+
+    </div>
+
+    <section class="card">
+
+      <h2>Nuevo registro</h2>
+
+      <label for="f-barcode">Código de barras</label>
+      <input
+        type="text"
+        id="f-barcode"
+        placeholder="Se completa al escanear"
+      >
+
+      <label for="f-nombre">Nombre / producto</label>
+      <input
+        type="text"
+        id="f-nombre"
+        placeholder="Ej: Repuesto John Deere"
+      >
+
+      <label for="f-cantidad">Cantidad</label>
+      <input
+        type="number"
+        id="f-cantidad"
+        placeholder="Ej: 10"
+        inputmode="numeric"
+      >
+
+      <label for="f-ubicacion">Ubicación / nota</label>
+      <input
+        type="text"
+        id="f-ubicacion"
+        placeholder="Ej: A-03-12"
+      >
+
+      <div class="save-row">
+        <button class="primary" id="btn-save">✓ Guardar registro</button>
+        <button class="ghost" id="btn-clear">Limpiar</button>
+      </div>
+
+    </section>
+
+    <div class="list-head">
+      <h2>Registros guardados</h2>
+      <span id="count">0</span>
+    </div>
+
+    <div id="list"></div>
+
+    <div class="card export-card">
+
+      <h2>Envío de registros</h2>
+
+      <div class="export-row">
+        <button class="primary" id="btn-export">✉️ Enviar por email</button>
+        <button class="ghost" id="btn-wipe">🗑 Borrar todo</button>
+      </div>
+
+      <textarea id="csv-out" readonly aria-label="Datos CSV para adjuntar al correo"></textarea>
+      <div class="email-note">El navegador abre tu correo y deja los datos listos para adjuntar.</div>
+
+    </div>
+
+    <div class="footer">
+      © 2026 Castro S.A. - Todos los derechos reservados
+    </div>
+
   </div>
-  <div id="list"></div>
 
-  <div class="export-row">
-    <button id="btn-export">Exportar CSV</button>
-    <button class="ghost" id="btn-wipe">Borrar todo</button>
-  </div>
-  <textarea id="csv-out" readonly></textarea>
-
-</main>
 
 <script>
 (function(){
@@ -397,34 +727,44 @@
   btnStart.addEventListener('click', startScan);
   btnStop.addEventListener('click', () => { stopScan(); setStatus(''); });
 
-  // ---------- Exportar ----------
+  // ---------- Enviar por email ----------
   $('btn-export').addEventListener('click', () => {
     if(records.length === 0){
-      setStatus('No hay registros para exportar.', false);
+      setStatus('No hay registros para enviar.', false);
       return;
     }
+
     const header = ['codigo_barras','nombre','cantidad','ubicacion','fecha'];
-    const rows = records.map(r => [r.barcode, r.nombre, r.cantidad, r.ubicacion, r.fecha]
-      .map(v => '"' + String(v || '').replace(/"/g,'""') + '"').join(','));
+    const rows = records.map(r =>
+      [r.barcode, r.nombre, r.cantidad, r.ubicacion, r.fecha]
+        .map(v => '"' + String(v || '').replace(/"/g,'""') + '"')
+        .join(',')
+    );
+
     const csv = [header.join(','), ...rows].join('\n');
 
-    let downloaded = false;
-    try{
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'inventario.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      downloaded = true;
-    }catch(e){ /* seguimos al respaldo */ }
+    const subject = 'Registros de inventario - Castro S.A.';
+    const body =
+      'Hola,%0D%0A%0D%0A' +
+      'Adjunto los registros relevados del inventario.%0D%0A%0D%0A' +
+      'Cantidad de registros: ' + records.length + '%0D%0A%0D%0A' +
+      'IMPORTANTE: el CSV se muestra debajo para poder copiarlo y adjuntarlo al correo.';
 
+    // El navegador no permite adjuntar automáticamente un archivo
+    // generado por JavaScript mediante mailto:. Abrimos el cliente de
+    // correo y mostramos el CSV para que pueda guardarse/adjuntarse.
     csvOut.style.display = 'block';
     csvOut.value = csv;
-    setStatus(downloaded ? 'CSV descargado. Si no se abrió solo, copialo del cuadro de abajo.' : 'Copiá el CSV del cuadro de abajo.', true);
+
+    const mailto = 'mailto:?subject=' + encodeURIComponent(subject) +
+                   '&body=' + body;
+
+    window.location.href = mailto;
+
+    setStatus(
+      'Se abrió el correo. Adjuntá el CSV mostrado debajo antes de enviarlo.',
+      true
+    );
   });
 
   loadRecords();
